@@ -5,43 +5,42 @@ import json
 import urllib.request
 import numpy as np
 
-# КРИТИЧНО НАДВАЖЛИВО: Налаштовуємо шляхи ДО того, як імпортувати наші модулі
-current_file_dir = os.path.dirname(os.path.abspath(__file__))  # папка src
-project_root = os.path.abspath(os.path.join(current_file_dir, '..'))  # папка AI_proj
+# Setting up paths
+current_file_dir = os.path.dirname(os.path.abspath(__file__)) 
+project_root = os.path.abspath(os.path.join(current_file_dir, '..')) 
 
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Тепер Python залізобетонно знає, де шукати папку 'src'
 from src.database import init_db, save_experiment_result
 from src.ga_optimizer import GeneticPIDOptimizer
 
 def run_main_optimization():
     print("\n" + "="*60)
-    print(" ІНТЕЛЛЕКТУАЛЬНА СИСТЕМА ОПТИМІЗАЦІЇ ПИД-КАСКАДОВ ЗАПУЩЕНА")
+    print(" The PID-cascade optimization intelligence system has been launched")
     print("="*60)
     
-    # 1. Ініціалізація БД
+    # Database initialization
     init_db()
     
-    # 2. Створення оптимізатора (20 кандидатів, 15 поколінь еволюції)
+    # Creating an optimizer (20 candidates, 15 generations of evolution)
     optimizer = GeneticPIDOptimizer(population_size=20, generations=15)
     
-    # 3. Запуск повного циклу навчання ШІ в симуляторі дельта-моделі
+    # Starting the full AI training cycle in the delta-model simulator
     evolution_history = optimizer.run_optimization()
     
-    # 4. Витягуємо переможця еволюції (останнє покоління, найкращий результат)
+    # Let's pull out the winner of the evolution (the last generation, the best result)
     final_best_score, final_best_candidate = evolution_history[-1]
     
     print("\n" + "-"*40)
-    print(" ЕВОЛЮЦІЯ ЗАВЕРШЕНА! НАЙКРАЩІ ПАРАМЕТРИ ЗНАЙДЕНО:")
-    print(f"    Коефіцієнт Kp: {final_best_candidate['kp']}")
-    print(f"    Коефіцієнт Ki: {final_best_candidate['ki']}")
-    print(f"    Коефіцієнт Kd: {final_best_candidate['kd']}")
-    print(f"    Підсумковий Fitness Score: {final_best_score:.2f}")
+    print(" EVOLUTION COMPLETE! THE BEST PARAMETERS FOUND:")
+    print(f"    Coefficient Kp: {final_best_candidate['kp']}")
+    print(f"    Coefficient Ki: {final_best_candidate['ki']}")
+    print(f"    Coefficient Kd: {final_best_candidate['kd']}")
+    print(f"    Final Fitness Score: {final_best_score:.2f}")
     print("-"*40 + "\n")
     
-    # 5. Збереження результатів експериментів в базу даних SQLite
+    # Saving experiment results in an SQLite database
     for gen_idx, (score, candidate) in enumerate(evolution_history):
         save_experiment_result(
             kp=candidate['kp'],
@@ -53,15 +52,16 @@ def run_main_optimization():
             csv_filename=f"ga_generation_{gen_idx+1}.csv"
         )
         
-    print("Всі етапи еволюції та найкращі хромосоми успішно задокументовані в БД experiments.db!")
+    print("All stages of evolution and the best chromosomes are successfully documented in the db experiments.db!")
     print("="*60 + "\n")
 
 if __name__ == "__main__":
     run_main_optimization()
 
-    # Коли увімкнено режим stream, код підключається до Wi-Fi дрона 
+
+
+
+    # Коли увімкнено режим stream
     #  run_pipeline(mode="stream")
 
-
-
-    # python src/main.py
+    # для запуску коду ввести в терміналі python -m src.main

@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Подключаем модули проекта
+# Connecting the project modules
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
 
@@ -12,7 +12,7 @@ import metrics
 os.makedirs('reports/figures', exist_ok=True)
 plt.rcParams['font.family'] = 'DejaVu Sans'
 
-# Воспроизводим ту же симуляцию дельта-модели
+# Running a simulation of the delta model
 def simulate_delta_model(Kp, Ki, Kd, steps=150, dt=0.02):
     pitch = 15.0
     gyro_y = 0.0
@@ -36,27 +36,27 @@ def simulate_delta_model(Kp, Ki, Kd, steps=150, dt=0.02):
         
     return pitch_history, gyro_history
 
-# Получаем данные для плохого и хорошего регуляторов
+# Getting data for bad and good regulators
 pitch_bad, gyro_bad = simulate_delta_model(Kp=0.25, Ki=0.02, Kd=0.01)
 pitch_good, gyro_good = simulate_delta_model(Kp=1.65, Ki=0.15, Kd=0.18)
 
 time_axis = np.arange(150) * 0.02
 
-# Рассчитываем динамику изменения мгновенной стоимости S(k) для обоих случаев
+# We calculate the dynamics of the change in the instantaneous value S(k) for both cases
 s_k_bad = [metrics.calculate_instantaneous_cost(*metrics.normalize_data(p, g)) for p, g in zip(pitch_bad, gyro_bad)]
 s_k_good = [metrics.calculate_instantaneous_cost(*metrics.normalize_data(p, g)) for p, g in zip(pitch_good, gyro_good)]
 
 
 # ========================================================
-# ГРАФИК 3: Переходный процесс угловой скорости (Gyro Y)
+# CHART 3: Transient process of angular velocity (Gyro Y)
 # ========================================================
 plt.figure(figsize=(10, 5))
-plt.plot(time_axis, gyro_bad, color='orange', linestyle='--', label='Начальный ПИД (Высокая угловая скорость)', linewidth=2)
-plt.plot(time_axis, gyro_good, color='blue', label='Оптимизированный ШІ ПИД (Стабильное затухание)', linewidth=2.5)
+plt.plot(time_axis, gyro_bad, color='orange', linestyle='--', label='Initial PID (High angular velocity)', linewidth=2)
+plt.plot(time_axis, gyro_good, color='blue', label='Optimized AI PID (Stable Damping)', linewidth=2.5)
 plt.axhline(0, color='black', linestyle=':', alpha=0.5)
-plt.title('📊 Динамика изменения угловой скорости (Gyro Y) во времени', fontsize=14, fontweight='bold')
-plt.xlabel('Час (секунди)', fontsize=12)
-plt.ylabel('Угловая скорость Pitch Rate (град/сек)', fontsize=12)
+plt.title('Dynamics of angular velocity change (Gyro Y) over time', fontsize=14, fontweight='bold')
+plt.xlabel('Time (seconds)', fontsize=12)
+plt.ylabel('Angular velocity Pitch Rate (deg/sec)', fontsize=12)
 plt.grid(True, linestyle='--', alpha=0.6)
 plt.legend(fontsize=11)
 plt.savefig('reports/figures/03_gyro_response.png', dpi=300)
@@ -65,22 +65,20 @@ plt.show()
 
 
 # ========================================================
-# ГРАФИК 4: Мгновенная стоимость состояния S(k)
+# CHART 4: Instantaneous value of state S(k)
 # ========================================================
 plt.figure(figsize=(10, 5))
-plt.fill_between(time_axis, s_k_bad, color='red', alpha=0.15, label='Накопленный штраф (Плохой ПИД)')
+plt.fill_between(time_axis, s_k_bad, color='red', alpha=0.15, label='Accumulated fine (Bad PID)')
 plt.plot(time_axis, s_k_bad, color='red', linestyle='--', linewidth=1.5)
 
-plt.fill_between(time_axis, s_k_good, color='green', alpha=0.25, label='Накопленный штраф (Оптимальный ПИД)')
+plt.fill_between(time_axis, s_k_good, color='green', alpha=0.25, label='Accumulated Fine (Optimal PID)')
 plt.plot(time_axis, s_k_good, color='green', linewidth=2)
 
-plt.title('📉 Распределение мгновенной стоимости состояния S(k) на интервале теста', fontsize=14, fontweight='bold')
-plt.xlabel('Час (секунди)', fontsize=12)
-plt.ylabel('Мгновенный штраф S(k) (безразмерный)', fontsize=12)
+plt.title('Distribution of the instantaneous value of state S(k) over the test interval', fontsize=14, fontweight='bold')
+plt.xlabel('Time (seconds)', fontsize=12)
+plt.ylabel('Instant penalty S(k) (dimensionless)', fontsize=12)
 plt.grid(True, linestyle='--', alpha=0.6)
 plt.legend(fontsize=11)
 plt.savefig('reports/figures/04_instantaneous_cost.png', dpi=300)
 plt.savefig('04_instantaneous_cost.png', dpi=300)
 plt.show()
-
-print("🏁 Дополнительные графики (03_gyro_response и 04_instantaneous_cost) успешно созданы!")

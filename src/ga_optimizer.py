@@ -9,7 +9,7 @@ class GeneticPIDOptimizer:
         self.mutation_rate = mutation_rate
         self.dt = dt
         
-        # Границы поиска коэффициентов PID согласно ТЗ и физическим лимитам стенда
+        # PID coefficient search boundaries
         self.bounds = {
             'kp': (0.1, 4.5),
             'ki': (0.0, 1.5),
@@ -17,9 +17,7 @@ class GeneticPIDOptimizer:
         }
 
     def init_population(self):
-        """
-        Генерация начальной случайной популяции PID-кандидатов.
-        """
+        """  Generating the initial random population of PID candidates. """
         population = []
         for _ in range(self.population_size):
             candidate = {
@@ -31,14 +29,10 @@ class GeneticPIDOptimizer:
         return population
 
     def simulate_candidate(self, candidate, steps=150):
-        """
-        Экспериментальная дельта-модель изменения состояния (ΔU -> Δω -> Δθ).
-        Симулирует поведение виртуального дрона на стенде с конкретным набором PID.
-        """
         Kp, Ki, Kd = candidate['kp'], candidate['ki'], candidate['kd']
         
-        pitch = 15.0  # Начальное отклонение стенда (дрон наклонен на 15 градусов)
-        gyro_y = 0.0  # Начальная угловая скорость
+        pitch = 7.0  # starting the test with the maximum standard deviation of 7 degrees
+        gyro_y = 0.0  
         
         pitch_history = []
         gyro_history = []
@@ -47,54 +41,64 @@ class GeneticPIDOptimizer:
         last_error = 0
         
         for _ in range(steps):
-            error = 0.0 - pitch  # Горизонт — наша цель
+            error = 0.0 - pitch  # Target — steady horizon (0 degrees)
             
-            # Расчет управляющего воздействия PID
+            # Calculation of the basic PID signal
             p_term = Kp * error
             integral_error += error * self.dt
             i_term = Ki * integral_error
             d_term = Kd * (error - last_error) / self.dt
             last_error = error
             
+            # Basic PID control
             U_pid = p_term + i_term + d_term
             
-            # Физический шаг дельта-модели (переходные приращения)
-            gyro_y += (U_pid * 15.0 - gyro_y * 0.15) * self.dt
+        
+            # We adjust the control to shift relative to the average thrust (for example 1200)
+            motor_signal = 1200 + (U_pid * 100) 
+            motor_signal = max(600, min(1800, motor_signal)) 
+            
+            # Physical response of the delta model to the actual motor signal
+            virtual_thrust = (motor_signal - 1200) / 600.0
+            gyro_y += (virtual_thrust * 15.0 - gyro_y * 0.15) * self.dt
             pitch += gyro_y * self.dt
             
+            # Check for a critical angle of 10 degrees (Death of the individual)
+            if abs(pitch) >= 10.0:
+                # The individual immediately stops the test due to an accident
+                pitch_history.append(pitch)
+                gyro_history.append(gyro_y)
+                break  
+                
             pitch_history.append(pitch)
             gyro_history.append(gyro_y)
-            
+          
         return pitch_history, gyro_history
 
     def evaluate_population(self, population):
-        """
-        Прогон всей популяции через симулятор и расчет Fitness Score для каждого.
-        """
+        """ Running the whole population through the simulator and calculating the Fitness Score for each one."""
         scored_population = []
         for candidate in population:
             pitch_hist, gyro_hist = self.simulate_candidate(candidate)
-            # Вычисляем комплексный фитнес (интеграл штрафов + Overshoot + Settling Time)
+            # Calculating the overall fitness (penalty integral + Overshoot + Settling Time)
             score = evaluate_flight_fitness(pitch_hist, gyro_hist, dt=self.dt)
             scored_population.append((score, candidate))
             
-        # Сортируем: чем МЕНЬШЕ фитнес (ошибка), тем ЛУЧШЕ кандидат
+        # We sort: the LESS fitness (mistake), the BETTER the candidate
         scored_population.sort(key=lambda x: x[0])
         return scored_population
 
     def selection(self, scored_population):
-        """
-        Турнирная селекция (отбор лучших родителей для скрещивания).
-        """
-        # Элитизм: железно забираем 2 лучших хромосомы без изменений
+        """Tournament selection (choosing the best parents for breeding)."""
+        # Elitism: we strictly take the 2 best chromosomes without any changes
         selected = [scored_population[0][1], scored_population[1][1]]
         
-        # Остальных выбираем турниром из случайных пар
+        # We pick the rest through a tournament of random pairs
         while len(selected) < self.population_size:
             player1 = random.choice(scored_population)[1]
             player2 = random.choice(scored_population)[1]
             
-            # Кто набрал меньше штрафных баллов в симуляторе — тот и победил
+            # The one who scored fewer penalty points in the simulator won.
             score1 = evaluate_flight_fitness(*self.simulate_candidate(player1))
             score2 = evaluate_flight_fitness(*self.simulate_candidate(player2))
             
@@ -103,9 +107,7 @@ class GeneticPIDOptimizer:
         return selected
 
     def crossover(self, parent1, parent2):
-        """
-        Арифметическое скрещивание (создание ребенка как взвешенной комбинации родителей).
-        """
+        """ Arithmetic crossover."""
         alpha = random.uniform(0.1, 0.9)
         child = {}
         for param in ['kp', 'ki', 'kd']:
@@ -115,25 +117,20 @@ class GeneticPIDOptimizer:
         return child
 
     def mutate(self, candidate):
-        """
-        Мутация: случайное изменение одного из коэффициентов для выхода из локальных минимумов.
-        """
+        """ Mutation: a random change of one of the coefficients to get out of local minima. """
         mutated = candidate.copy()
         for param in ['kp', 'ki', 'kd']:
             if random.random() < self.mutation_rate:
-                # Добавляем небольшое случайное нормальное отклонение
+                # Adding a small random normal deviation
                 mutation_value = random.normalvariate(0, 0.2)
                 new_value = mutated[param] + mutation_value
-                # Проверяем, чтобы не выйти за границы ТЗ
                 low, high = self.bounds[param]
                 mutated[param] = round(max(low, min(high, new_value)), 3)
         return mutated
 
     def run_optimization(self):
-        """
-        Главный цикл эволюции ШИ-оптимизатора.
-        """
-        print(f" Запуск эволюции ГА: {self.generations} поколений, популяция {self.population_size}")
+        """ The main loop of the AI optimizer's evolution. """
+        print(f" Starting GA evolution: {self.generations} generations, population {self.population_size}")
         
         population = self.init_population()
         history = []
@@ -142,14 +139,14 @@ class GeneticPIDOptimizer:
             scored_pop = self.evaluate_population(population)
             best_score, best_candidate = scored_pop[0]
             
-            print(f"Поколение {gen:02d} | Лучший Fitness: {best_score:.2f} | PID: Kp={best_candidate['kp']}, Ki={best_candidate['ki']}, Kd={best_candidate['kd']}")
+            print(f"Generation {gen:02d} | Best Fitness: {best_score:.2f} | PID: Kp={best_candidate['kp']}, Ki={best_candidate['ki']}, Kd={best_candidate['kd']}")
             history.append((best_score, best_candidate))
             
-            # Селекция родителей
+            # Parent selection
             selected_parents = self.selection(scored_pop)
             
-            # Создание следующего поколения (Скрещивание + Мутация)
-            next_generation = [scored_pop[0][1], scored_pop[1][1]]  # Сохраняем элиту
+            # Creating the next generation (Crossover + Mutation)
+            next_generation = [scored_pop[0][1], scored_pop[1][1]]  # Preserving the elite
             
             while len(next_generation) < self.population_size:
                 p1 = random.choice(selected_parents)

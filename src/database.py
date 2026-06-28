@@ -2,7 +2,7 @@ import sqlite3
 from src.config import DB_PATH
 
 def init_db():
-    """Створює таблицю для збереження результатів тестів, якщо вона не існує."""
+    """Creates a table to store test results if it doesn't exist."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -11,22 +11,22 @@ def init_db():
         CREATE TABLE IF NOT EXISTS test_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            kp REAL,                  -- Пропорційний коефіцієнт PID
-            ki REAL,                  -- Інтегруючий коефіцієнт PID
-            kd REAL,                  -- Диференціюючий коефіцієнт PID
-            fitness_version TEXT,     -- Версія нашої fitness-функції (напр., 'v1.0')
-            fitness_score REAL,       -- Підсумкова оцінка якості польоту
-            status TEXT,              -- Статус: 'success', 'failed' (дрон упав) тощо
-            csv_filename TEXT         -- Посилання на сирий CSV файл логу цього тесту
+            kp REAL,                  -- PID proportional coefficient
+            ki REAL,                  -- PID integrating coefficient
+            kd REAL,                  -- PID derivative coefficient
+            fitness_version TEXT,     -- Version of our fitness function (e.g., 'v1.0')
+            fitness_score REAL,       -- Final flight quality assessment
+            status TEXT,              -- Status: 'success', 'failed', etc.
+            csv_filename TEXT         -- Link to the raw CSV file of this test log
         )
     ''')
     
     conn.commit()
     conn.close()
-    print(f"Базу даних успішно ініціалізовано за шляхом: {DB_PATH}")
+    print(f"The database was successfully initialized at the path: {DB_PATH}")
 
 def save_experiment_result(kp, ki, kd, fitness_version, fitness_score, status, csv_filename):
-    """Функція для запису результату нового тесту в базу."""
+    """A function to save the result of a new test to the database."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -37,4 +37,4 @@ def save_experiment_result(kp, ki, kd, fitness_version, fitness_score, status, c
     
     conn.commit()
     conn.close()
-    print("Результат експерименту успешно збережено в SQL!")
+    print("The experiment result has been successfully saved in SQL!")
