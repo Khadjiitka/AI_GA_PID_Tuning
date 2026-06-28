@@ -1,34 +1,48 @@
 import numpy as np
 
-def calculate_mae_error(current_angles, target_angle=0.0):
+def normalize_data(pitch, gyro_y, pitch_limit=45.0, gyro_limit=250.0):
     """
-    Рахує середню абсолютну помилку (Mean Absolute Error).
-    Чим менше це число, тим стабільніше тримався дрон.
+    Приведення величин до безразмерного вигляду (нормалізація) згідно з ТЗ.
     """
-    # Перетворюємо в масив numpy для швидкості розрахунків
-    angles = np.array(current_angles)
-    # Рахуємо абсолютну різницю між поточним кутом і цільовим (0)
-    errors = np.abs(angles - target_angle)
-    # Повертаємо середнє значення
-    return float(np.mean(errors))
+    pitch_norm = pitch / pitch_limit
+    gyro_norm = gyro_y / gyro_limit
+    return pitch_norm, gyro_norm
 
-def calculate_fitness_v1(current_angles, target_angle=0.0):
+def calculate_instantaneous_cost(pitch_norm, gyro_norm, w_theta=0.7, w_omega=0.3):
     """
-    Fitness-функція Версії 1.0.
-    Перетворює помилку в 'бали' від 0 до 100.
-    100 — ідеальний політ без коливань.
-    0 — дрон сильно бовтало.
+    Формула з ТЗ: S(k) = w_theta * |\Delta theta(k)| + w_omega * |\Delta omega(k)|
+    Оцінює якість стану системи на конкретному кроці k.
     """
-    if len(current_angles) == 0:
-        return 0.0
+    return w_theta * abs(pitch_norm) + w_omega * abs(gyro_norm)
+
+def evaluate_flight_fitness(pitch_history, gyro_history, dt=0.02, w_os=15.0, w_settle=10.0):
+    """
+    Підсумкова функція Fitness за весь інтервал часу (мінімізується в ГА).
+    Включает інтеграл вартості S(k)*dt + штрафи за Overshoot і Settling Time.
+    """
+    pitch_history = np.array(pitch_history)
+    gyro_history = np.array(gyro_history)
+    
+    # 1. Перевірка аварійного бар'єра (Safety Layer)
+    if np.any(abs(pitch_history) > 45.0):
+        return 9999.0  # Максимальний штраф (Emergency Trigger)
+
+    # 2. Інтеграл миттєвої вартості
+    total_integral = 0
+    for p, g in zip(pitch_history, gyro_history):
+        p_norm, g_norm = normalize_data(p, g)
+        total_integral += calculate_instantaneous_cost(p_norm, g_norm) * dt
         
-    mae = calculate_mae_error(current_angles, target_angle)
-    max_error = float(np.max(np.abs(np.array(current_angles) - target_angle)))
+    # 3. Розрахунок Перерегулювання (Overshoot)
+    overshoot = max(abs(pitch_history)) if len(pitch_history) > 0 else 0
     
-    # Формула оцінки: базово даємо 100 балів і віднімаємо штраф за помилки.
-    # Вагові коефіцієнти : середня помилка важливіша, тому множимо її на 5, 
-    # а максимальний спалах — на 1.
-    score = 100.0 - (mae * 5.0) - (max_error * 1.0)
-    
-    # Оцінка не може бути меншою за 0
-    return max(0.0, score)
+    # 4. Розрахунок Часу заспокоєння (Settling Time)
+    settling_time = 0
+    for i in range(len(pitch_history) - 1, -1, -1):
+        if abs(pitch_history[i]) > 1.0:
+            settling_time = i * dt
+            break
+
+    # Підсумкова формула мінімізації
+    total_fitness = total_integral + (w_os * overshoot) + (w_settle * settling_time)
+    return float(total_fitness)
